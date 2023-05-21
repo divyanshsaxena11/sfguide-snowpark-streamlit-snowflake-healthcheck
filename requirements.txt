@@ -1,0 +1,4 @@
+#requirements.txt
+
+snowflake-connector-python==2.8.0
+snowflake-snowpark-python==0.12.0
