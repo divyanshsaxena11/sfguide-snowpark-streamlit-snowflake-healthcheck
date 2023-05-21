@@ -1,5 +1,5 @@
 #requirements.txt
 
-snowflake-connector-python==2.8.0
-snowflake-snowpark-python==0.12.0
-plotly
+snowflake-connector-python==2.7.12
+snowflake-snowpark-python==1.1.0
+plotly==5.14.1
