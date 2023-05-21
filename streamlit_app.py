@@ -1,15 +1,9 @@
 from snowflake.snowpark.session import Session
 from snowflake.snowpark import functions as F
 from snowflake.snowpark.types import *
-from snowflake.snowpark import Window
-from streamlit_elements import elements, mui, html
 import streamlit as st
 import pandas as pd
-import numpy as np
 import streamlit as st
-import numpy as np
-import plotly.figure_factory as ff
-import scipy
 from PIL import Image
 import datetime
 import plotly.express as px
