@@ -32,7 +32,7 @@ session = ""
 if not ss:
     ss.pressed_first_button = False
 
-# @st.cache_data
+
 with st.sidebar:
     SF_ACCOUNT = st.text_input(
         "Enter Your Snowflake Account [<account_details>.snowflakecomputing.com] :"
@@ -52,8 +52,11 @@ with st.sidebar:
             datawarehouse_list = datawarehouse_list["name"]
 
             datawarehouse_option = st.selectbox(
-                "Select Virtual datawarehouse", datawarehouse_list
+                "Select Virtual warehouse", datawarehouse_list
             )
+            set_warehouse = session.sql(
+                f"""USE WAREHOUSE {datawarehouse_option}   ;"""
+            ).collect()
 
 with st.container():
     if session != "":
@@ -77,26 +80,26 @@ with st.container():
 
         # Elements for Warehouse Performances
         with tab1:
-            df = session.sql(
+            sql_warehouse_performances = session.sql(
                 """
              SELECT DATE_TRUNC('HOUR', START_TIME) AS QUERY_START_HOUR
-      ,WAREHOUSE_NAME
-      ,COUNT(*) AS NUM_QUERIES
-  FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
- WHERE START_TIME >= '"""
+               ,WAREHOUSE_NAME
+                    ,COUNT(*) AS NUM_QUERIES
+               FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+               WHERE START_TIME >= '"""
                 + str(date_range)
                 + """' AND WAREHOUSE_NAME IS NOT NULL
- GROUP BY 1, 2
- ORDER BY 1 DESC, 2
+               GROUP BY 1, 2
+               ORDER BY 1 DESC, 2
              """
             ).to_pandas()
             st.subheader(
                 "Average number of queries run on an hourly basis - :red[Understand Query Activity]"
             )
-            df2 = df.pivot_table(
+            sql_warehouse_performances_pivot = sql_warehouse_performances.pivot_table(
                 values="NUM_QUERIES", index="QUERY_START_HOUR", columns="WAREHOUSE_NAME"
             )
-            st.area_chart(data=df2)
+            st.area_chart(data=sql_warehouse_performances_pivot)
 
             st.subheader(
                 "Queries by # of Times Executed and Execution Time - :red[Opportunity to materialize the result set]"
@@ -146,7 +149,7 @@ with st.container():
             
             order by  TOTAL_ELAPSED_TIME desc
             
-            LIMIT 50
+
 
              """
             ).to_pandas()
@@ -206,16 +209,16 @@ with st.container():
             sql_users_heavy_scanners = session.sql(
                 """
              select 
-  User_name
-, warehouse_name
-, avg(case when partitions_total > 0 then partitions_scanned / partitions_total else 0 end) avg_pct_scanned
-from   snowflake.account_usage.query_history
-where  start_time::date > '"""
+               User_name
+               , warehouse_name
+               , avg(case when partitions_total > 0 then partitions_scanned / partitions_total else 0 end) avg_pct_scanned
+               from   snowflake.account_usage.query_history
+               where  start_time::date > '"""
                 + str(date_range)
                 + """'
-and warehouse_name is not null
-group by 1, 2
-order by 3 desc
+               and warehouse_name is not null
+               group by 1, 2
+               order by 3 desc
              """
             ).to_pandas()
             # st.dataframe(sql_users_heavy_scanners)
@@ -227,15 +230,15 @@ order by 3 desc
             sql_users_with_full_q_scan = session.sql(
                 """
              SELECT USER_NAME
-,COUNT(*) as COUNT_OF_QUERIES
-FROM "SNOWFLAKE"."ACCOUNT_USAGE"."QUERY_HISTORY"
-WHERE START_TIME >= '"""
+               ,COUNT(*) as COUNT_OF_QUERIES
+               FROM "SNOWFLAKE"."ACCOUNT_USAGE"."QUERY_HISTORY"
+               WHERE START_TIME >= '"""
                 + str(date_range)
                 + """'
-AND PARTITIONS_SCANNED > (PARTITIONS_TOTAL*0.95)
-AND QUERY_TYPE NOT LIKE 'CREATE%'
-group by 1
-order by 2 desc
+               AND PARTITIONS_SCANNED > (PARTITIONS_TOTAL*0.95)
+               AND QUERY_TYPE NOT LIKE 'CREATE%'
+               group by 1
+               order by 2 desc
              
              """
             ).to_pandas()
@@ -243,6 +246,37 @@ order by 2 desc
                 "Users with near Full Table Scans - :red[opportunity to train the user or enable clustering]"
             )
             st.dataframe(sql_users_with_full_q_scan, use_container_width=True)
+
+            st.subheader(
+                "Highly Active Users - :red[Identification of Expensive Users]"
+            )
+            sql_users_high_credits = session.sql(
+                """
+            select user_name, DATE(START_TIME) AS DATE, 
+               round(sum(total_elapsed_time/1000 * 
+               case warehouse_size 
+               when 'X-Small' then 1/60/60 
+               when 'Small'   then 2/60/60 
+               when 'Medium'  then 4/60/60 
+               when 'Large'   then 8/60/60 
+               when 'X-Large' then 16/60/60 
+               when '2X-Large' then 32/60/60 
+               when '3X-Large' then 64/60/60 
+               when '4X-Large' then 128/60/60 
+               when '5X-Large' then 256/60/60 
+               else 0 
+               end),2) as estimated_credits 
+               from snowflake.account_usage.query_history 
+               WHERE START_TIME >= '"""
+                + str(date_range)
+                + """' group by 1,2 
+               order by 3 desc 
+                        """
+            ).to_pandas()
+            sql_users_high_credits_pivot = sql_users_high_credits.pivot_table(
+                values="ESTIMATED_CREDITS", index="DATE", columns="USER_NAME"
+            )
+            st.area_chart(sql_users_high_credits_pivot)
 
         with tab3:
             # defining Metrix for Warehouse and Storage Usage
@@ -305,6 +339,8 @@ order by 2 desc
                     value=float(sql_total_storage_size["FAILSAFE_BYTES"]),
                 )
 
+            # SNOWFLAKE MATERIALIZED VIEW COST GRAPH
+
             st.subheader(
                 "Materialized Views Cost History - :red[Quick identification of irregularities]"
             )
@@ -327,15 +363,9 @@ order by 2 desc
                 values="CREDITS_USED", index="DATE", columns="MV_NAME"
             )
 
-            # TEST QUERY NEED TO BE REMOVED------------------------------------------------
-            ss = session.sql(
-                "select * from esg_air_travel_edw.rdv.mv_data where DATE_DATA >= '"
-                + str(date_range)
-                + "'  "
-            ).to_pandas()
-            ss_pivot = ss.pivot_table(values="CREDITS", index="DATE_DATA", columns="MV")
-            # -----------------------------------------------------------------------------
-            st.area_chart(ss_pivot)
+            st.area_chart(sql_mv_cost_analysis_pivot)
+
+            # SNOWFLAKE SOS COST GRAPH
 
             st.subheader(
                 "Search Optimization Cost History - :red[Quick identification of irregularities]"
@@ -361,6 +391,8 @@ order by 2 desc
             )
             st.bar_chart(sql_sos_cost_pivot)
 
+            # SNOWFLAKE DATABASE REPLICATION COST GRAPH
+
             st.subheader(
                 "Replication Cost History - :red[Quick identification of irregularities]"
             )
@@ -384,6 +416,7 @@ order by 2 desc
                 "AutoClustering Cost History - :red[Quick identification of irregularities]"
             )
 
+            # SNOWFLAKE AUTO CLUSTERING COST GRAPH
             sql_auto_clustering_cost = session.sql(
                 """
              SELECT TO_DATE(START_TIME) as DATE
@@ -403,14 +436,14 @@ order by 2 desc
             )
             st.bar_chart(sql_auto_clustering_cost_pivot)
 
+            # WAREHOUSE USAGE PIE CHART METRIX
             sql_warehouse_usage_matrix = session.sql(
                 """
              select warehouse_name, sum(credits_used) as CREDITS_USED from snowflake.account_usage.warehouse_metering_history
-WHERE START_TIME >= '"""
+               WHERE START_TIME >= '"""
                 + str(date_range)
                 + """'
-GROUP BY 1
-             
+               GROUP BY 1
              """
             ).to_pandas()
 
