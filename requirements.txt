@@ -1,5 +1,5 @@
 #requirements.txt
 charset-normalizer==2.0.8
 snowflake-connector-python
-snowflake-snowpark-python
+snowflake-snowpark-python[pandas]
 plotly==5.14.1
