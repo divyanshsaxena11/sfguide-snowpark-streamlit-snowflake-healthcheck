@@ -1,5 +1,5 @@
 #requirements.txt
-charset-normalizer==2.1.0
+charset-normalizer==2.0.8
 snowflake-connector-python
 snowflake-snowpark-python
 plotly==5.14.1
