@@ -7,6 +7,7 @@ import streamlit as st
 from PIL import Image
 import datetime
 import plotly.express as px
+from datetime import date, timedelta
 
 # Streamlit config
 st.set_page_config(
@@ -65,7 +66,10 @@ with st.container():
             "Get better understanding of Snowflake's Resource Optimization and Performance capabilities on :red[Streamlit]"
         )
 
-        date_range = st.date_input("Select the Starting Date for Report Generation")
+        date_range = st.date_input(
+            "Select the Starting Date for Report Generation",
+            (date.today() - timedelta(days=30)),
+        )
         currentdate = datetime.datetime.today().strftime("%Y-%m-%d")
         if str(date_range) > currentdate:
             st.error("The date selected is greated than current date!", icon="🚨")
